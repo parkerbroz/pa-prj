@@ -38,6 +38,51 @@ test('arbitrary tags select rules and approval stages, with versioned snapshots'
   assert.equal(currentVersion(submission).stagePlan.at(-1).name, 'Updated legal review');
 });
 
+test('stage checks run only when their stage and extra tag conditions match', () => {
+  const state = seedState();
+  const stage = saveStage(state, null, {
+    actorId: 'maya', name: 'Regional review', role: 'legal', scopeTags: 'region-west', order: 4, active: true,
+  });
+  const rule = saveRule(state, null, {
+    actorId: 'maya', name: 'Regional notice', kind: 'required', term: 'Regional notice',
+    source: 'Sample regional policy', category: 'Internal policy', severity: 'medium',
+    scopeTags: 'email', stageId: stage.id, active: true,
+  });
+  const withoutStage = createSubmission(state, {
+    actorId: 'alex', title: 'Email outside region', tags: 'email', content: 'A standard email campaign for existing customers.',
+  });
+  assert.equal(currentVersion(withoutStage).checks.some((check) => check.ruleId === rule.id), false);
+  const withoutExtraTag = createSubmission(state, {
+    actorId: 'alex', title: 'Regional print campaign', tags: 'region-west, print', content: 'A regional print campaign for existing customers.',
+  });
+  assert.equal(currentVersion(withoutExtraTag).checks.some((check) => check.ruleId === rule.id), false);
+  const matching = createSubmission(state, {
+    actorId: 'alex', title: 'Regional email campaign', tags: 'region-west, email', content: 'A regional email campaign for existing customers.',
+  });
+  const check = currentVersion(matching).checks.find((item) => item.ruleId === rule.id);
+  assert.equal(check.stageId, stage.id);
+  assert.equal(check.stageName, 'Regional review');
+  assert.equal(check.passed, false);
+  saveStage(state, stage.id, { ...stage, actorId: 'maya', active: false });
+  const paused = createSubmission(state, {
+    actorId: 'alex', title: 'Paused regional campaign', tags: 'region-west, email', content: 'Another regional email campaign for existing customers.',
+  });
+  assert.equal(currentVersion(paused).checks.some((item) => item.ruleId === rule.id), false);
+  assert.equal(currentVersion(matching).checks.find((item) => item.ruleId === rule.id).stageName, 'Regional review');
+});
+
+test('invalid pipeline edits leave the configuration intact', () => {
+  const state = seedState();
+  const globalStage = state.stages.find((stage) => stage.scopeTags.length === 0);
+  assert.throws(() => saveStage(state, globalStage.id, { ...globalStage, actorId: 'maya', active: false }), /Keep at least one active stage/);
+  assert.equal(state.stages.find((stage) => stage.id === globalStage.id).active, true);
+  assert.equal(state.stages.find((stage) => stage.id === globalStage.id).version, 1);
+  assert.throws(() => saveRule(state, null, {
+    actorId: 'maya', name: 'Unattached check', kind: 'required', term: 'Required phrase',
+    source: 'Sample policy', category: 'Internal policy', severity: 'low', stageId: 'not-a-stage',
+  }), /existing pipeline stage/);
+});
+
 test('change requests require a revision; approval belongs to the current version', () => {
   const state = seedState();
   const submission = createSubmission(state, {

@@ -6,7 +6,7 @@ ClearPath Financial needs to approve a growing volume of marketing materials acr
 
 ClearPath Marketing Compliance Review is a shared workspace for submitting, checking, revising, approving, and auditing marketing materials.
 
-The product borrows useful ideas from pull requests and CI/CD: every submission is versioned, automated checks run before human review, reviewers leave findings in context, and approval gates control release. The user-facing product should still speak in marketing and compliance language. Marketers should see “submissions,” “findings,” and “approvals,” not software-development terminology they do not use.
+The product borrows useful ideas from pull requests and CI/CD: every material is versioned, automated checks run before human review, reviewers leave findings in context, and approval gates control release. This prototype calls each material an MR, while keeping the rest of the interface in plain marketing and compliance language.
 
 ## Users and their goals
 
@@ -70,13 +70,13 @@ Checks should return an explanation, severity, rule reference, and suggested nex
 
 ## Main product surfaces
 
-### 1. Submission queue
+### 1. MR list
 
-The home screen is a work queue for marketers and compliance workers. Users can filter by status or any tag and search material titles and owners. The prototype shows counts for items in review, changes requested, approved or published, and open findings. Review time and first-pass approval metrics are natural next steps.
+The home screen is a work queue for marketers and compliance workers. Users can filter by status or any tag and search material titles and owners. Review time and first-pass approval metrics are natural next steps.
 
 The queue should make the next action obvious. A compliance reviewer should be able to open “high-risk affiliate submissions awaiting review” without navigating through projects or folders.
 
-### 2. Submission detail
+### 2. MR detail
 
 The detail view contains:
 
@@ -89,31 +89,23 @@ The detail view contains:
 - Current approval status and required approvers
 - Full audit history
 
-Marketers should be able to respond to a finding, upload a new version, and see which findings were resolved or reopened. Reviewers should be able to approve, reject, request changes, or escalate.
+Marketers can respond in the discussion and submit a new version. Reviewers can add or resolve findings, request changes, or approve. Explicit escalation and rejection states are future extensions.
 
-### 3. Workflow builder
+### 3. Pipeline builder
 
-Administrators can create reusable workflow templates using a small set of steps:
+Administrators can build one ordered route from conditional human approval stages. Every stage has a reviewer team and a tag condition. Automated checks run at submission time when their stage matches; publication is a separate action after all stages approve.
 
-- Automated preflight
-- Marketing review
-- Compliance review
-- Legal review
-- Product review
-- Final approval
-- Publish authorization
+The 24-hour MVP provides an ordered, tag-conditional builder rather than an entirely free-form workflow engine. Pipeline-level checks and a tag-based route preview live here.
 
-The 24-hour MVP should provide a template-based builder with configurable steps and tag conditions rather than an entirely free-form workflow engine. This keeps the product understandable for nontechnical administrators while demonstrating the core value.
+### 4. Stage builder
 
-### 4. Rules and approved content
+Each stage has a reviewer team, order, active state, and tag condition. Its checks have an additional optional tag condition, type, severity, policy category, source, and version. Approved disclosures, rate tables, product terms, and claims should eventually have a governed source of truth.
 
-Rules should be managed separately from individual submissions. Each rule has an owner, scope, severity, effective date, and version. Approved disclosures, rate tables, product terms, and claims should also have a source of truth.
-
-When a check runs, the system records the exact rule version and source content used. If a rule changes later, the historical review remains reproducible.
+When a check runs, the system records the exact rule and stage versions used. If configuration changes later, the historical review record remains intact.
 
 ## Audit trail and governance
 
-Auditability is a first-class product feature, not a reporting add-on.
+Auditability is a first-class product feature, not a reporting add-on. The prototype records evidence and exports it as JSON, but its local file storage is not tamper-evident regulated storage.
 
 For every submission version, the system should record:
 
@@ -156,7 +148,7 @@ The demo should allow a user to:
 4. Request changes and upload a revised version.
 5. Approve the revised version as a compliance reviewer.
 6. Filter the shared queue by tags and status.
-7. View and export the immutable audit trail.
+7. View and export the versioned audit record.
 
 Example sample findings can illustrate a global prohibited phrase, a channel-specific disclosure, or a product-specific notice. These should be clearly labeled as demonstration rules rather than a complete legal compliance engine.
 
@@ -176,4 +168,4 @@ The primary success criterion is not simply fewer reviewer comments. It is faste
 
 ## Product positioning
 
-ClearPath is best positioned as a financial-marketing compliance workflow and evidence system. The pull-request metaphor explains the interaction model, but the product’s real value is the combination of finance-specific rules, metadata-driven routing, human approval gates, version control, and regulator-ready audit history.
+ClearPath is best positioned as a financial-marketing compliance workflow and evidence system. The pull-request metaphor explains the interaction model, but the product’s real value is the combination of governed rules, metadata-driven routing, human approval gates, version control, and an exportable decision history. Regulated use would require stronger identity, retention, and tamper-evidence controls.

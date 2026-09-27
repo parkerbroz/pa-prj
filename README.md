@@ -1,57 +1,39 @@
-# ClearPath Review Studio
+# Marketing review workspace
 
-A working take-home prototype for marketing compliance teams. All materials enter one shared queue. Any tags can be added to a submission; rules and review stages apply when their configured tags match. Marketers and reviewers work on numbered, immutable versions, and every decision stays attached to the version it covered.
+A take-home prototype for reviewing marketing materials with a pull-request-style workflow. The UI has four views: an MR list, an MR detail view, a pipeline builder, and a stage builder. It has no product-specific taxonomy: any tags can be used, and tag conditions determine which stages and checks apply.
 
-## Run locally
+## Run
 
-Requires Node.js 20 or later. No package installation or external services are required.
+Requires Node.js 20+. No package installation or external service is needed.
 
 ```sh
 npm start
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The first launch creates fictional sample data in `data/store.json`. That file is ignored by Git. Set `PORT`, `HOST`, and `DATA_FILE` to change the listener and storage location. For a container or hosted environment, set `HOST=0.0.0.0`.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The first launch seeds fictional data in `data/store.json` (ignored by Git). Set `PORT`, `HOST`, and `DATA_FILE` to change the listener and storage path. For a container, use `HOST=0.0.0.0`.
 
-To share a temporary interview demo, keep the server running and start a [Cloudflare quick tunnel](https://developers.cloudflare.com/tunnel/get-started/#quick-tunnels-development) in another terminal:
-
-```sh
-brew install cloudflared
-cloudflared tunnel --url http://127.0.0.1:3000
-```
-
-The tunnel prints a public URL and lasts only while its process and the local server remain running. Use fictional demo content; this prototype has no real user authentication.
+To share a temporary demo, run `cloudflared tunnel --url http://127.0.0.1:3000` while the server stays running. Its public URL is temporary. Use only fictional content: demo role switching is not authentication.
 
 ## Demo flow
 
-1. In **Pipelines**, enter tags in the route preview. An empty scope means a stage applies to every submission; a scoped stage applies when all of its tags are present.
-2. Add a stage for any new tag, then add a matching required or prohibited phrase in **Rule library**.
-3. Switch the demo user to **Alex Morgan · Marketing** and create a submission using that tag. Paste copy or attach an image/PDF with reviewable copy entered separately.
-4. Switch to the assigned reviewer to add findings or request changes. Alex can submit a new version, which reruns checks and restarts the approval route.
-5. Approve each required stage, then switch back to Marketing to mark the approved version published.
-6. Open **History & evidence** or download an **Audit package**. Editing a published material starts a new review and removes its prior publication authorization.
+1. Open **Pipeline** and preview a route with tags such as `affiliate, high-risk`.
+2. Open a stage, edit its reviewer/team and tag conditions, and add a required or prohibited phrase check. Checks can have additional tag conditions or be moved to pipeline-level preflight.
+3. Open **MRs**, create a material with any tags, and paste reviewable copy. Optional images/PDFs and source URLs are stored with the version.
+4. Switch demo users to add findings, request changes, submit a revision, resolve findings, approve each stage, and mark the approved version published.
+5. On the MR, open **History & evidence** or export its JSON audit package.
 
-The fictional seed data includes examples across email, web, social, article, and print-like workflows. No product or channel names are hardcoded into the rule engine.
+Existing demo stores created before the stage-check update still work. Their previously unassigned checks appear under **Pipeline-level checks**, where they can be moved into a stage. A fresh seeded store starts with checks attached to stages.
 
-## What is implemented
+## Model and safeguards
 
-- Shared queue with status, tag, and text filters
-- General submissions with open ended tags, pasted copy, optional source URL, and optional PNG/JPEG/WebP/PDF attachment
-- Configurable rule library with category, source, severity, version, active state, and tag conditions
-- Configurable sequential approval stages with reviewer team, order, active state, and tag conditions
-- Live tag-based route preview
-- Rule and stage snapshots for each submitted version
-- Deterministic preflight checks, reviewer findings, comments, resolutions, change requests, version comparison, approvals, and publication gate
-- JSON audit export with original content, attachment data, SHA-256 hashes, check results, rule/stage snapshots, findings, decisions, comments, and timestamped events
-- Local JSON persistence using atomic file replacement
+- One shared MR queue, filterable by status, tag, and text.
+- Ordered approval stages with arbitrary tag conditions. At least one active global stage is required.
+- Checks are either pipeline-level or attached to a stage. An attached check runs only if that stage and any extra check tags match the MR. Checks run when a version is submitted, before human review.
+- Each version snapshots its content hash, applicable stages, checks, check results, and rule/stage versions. Later configuration changes affect new versions only.
+- Automated failures create findings, but never auto-reject or auto-approve. Reviewers must resolve open findings before approval.
+- Approvals bind to a version; revisions invalidate prior publication authorization.
+- JSON audit export contains the original content/attachment, SHA-256 hashes, findings, comments, decisions, and events.
 
-## Test
+Run `npm test` for workflow and tag-routing tests.
 
-```sh
-npm test
-```
-
-The tests cover arbitrary tag routing, configuration snapshots, revision gates, finding resolution, publication authorization, and audit exports.
-
-## Design and limits
-
-Read [DESIGN.md](DESIGN.md) for the product rationale. This is a demo, not a legal determination engine. The seeded rules are fictional sample internal policies. Automated checks are deliberately narrow and inspect the text supplied by the marketer; image and PDF attachments are preserved for human review but are not OCR'd. The role switcher simulates teams and is not authentication. The local JSON store is an application-level history, not tamper-evident regulated storage. Real deployment would need identity, access controls, durable storage, retention policy, rule governance, and expert-maintained legal content before handling actual customer campaigns.
+This is a workflow demonstration, not a legal determination engine. Sample policies are fictional. Checks are exact, case-insensitive phrase checks on pasted text; attachments are not OCR'd. The local JSON store is not tamper-evident regulated storage. Production use would require authentication, permissions, durable storage, retention rules, rule governance, and expert-maintained policy content.
