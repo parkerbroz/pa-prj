@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  seedState, saveRule, saveStage, createSubmission, addVersion, decide, publish,
+  seedState, saveRule, saveStage, savePipeline, previewRoute, createSubmission, addVersion, decide, publish,
   resolveFinding, addManualFinding, currentVersion, currentFindings, auditPackage,
   hashVersion,
 } from '../lib/core.js';
@@ -14,7 +14,7 @@ test('arbitrary tags select rules and approval stages, with versioned snapshots'
   const rule = saveRule(state, null, {
     actorId: 'maya', name: 'Campaign reference', kind: 'required', term: 'Campaign ID',
     source: 'Sample policy', category: 'Internal policy', severity: 'medium',
-    scopeTags: 'experimental', active: true,
+    scopeTags: 'experimental', stageId: stage.id, active: true,
   });
   const submission = createSubmission(state, {
     actorId: 'alex', title: 'Any format campaign', tags: 'experimental, print',
@@ -74,13 +74,80 @@ test('stage checks run only when their stage and extra tag conditions match', ()
 test('invalid pipeline edits leave the configuration intact', () => {
   const state = seedState();
   const globalStage = state.stages.find((stage) => stage.scopeTags.length === 0);
-  assert.throws(() => saveStage(state, globalStage.id, { ...globalStage, actorId: 'maya', active: false }), /Keep at least one active stage/);
+  assert.throws(() => saveStage(state, globalStage.id, { ...globalStage, actorId: 'maya', active: false }), /Every active pipeline needs/);
   assert.equal(state.stages.find((stage) => stage.id === globalStage.id).active, true);
   assert.equal(state.stages.find((stage) => stage.id === globalStage.id).version, 1);
   assert.throws(() => saveRule(state, null, {
     actorId: 'maya', name: 'Unattached check', kind: 'required', term: 'Required phrase',
     source: 'Sample policy', category: 'Internal policy', severity: 'low', stageId: 'not-a-stage',
   }), /existing pipeline stage/);
+});
+
+test('named pipelines are assigned by tags and preview matches submitted snapshots', () => {
+  const state = seedState();
+  const draft = savePipeline(state, null, {
+    actorId: 'maya', name: 'Affiliate route', scopeTags: 'affiliate', priority: 5, active: false,
+  });
+  assert.throws(() => savePipeline(state, draft.id, { ...draft, actorId: 'maya', active: true }), /Add an active stage/);
+  const stage = saveStage(state, null, {
+    actorId: 'maya', pipelineId: draft.id, name: 'Partner compliance', role: 'partner_ops',
+    scopeTags: [], order: 1, active: true,
+  });
+  const rule = saveRule(state, null, {
+    actorId: 'maya', pipelineId: draft.id, stageId: stage.id, name: 'Affiliate disclosure',
+    kind: 'required', term: 'Advertising disclosure', source: 'Sample partner policy',
+    category: 'Internal policy', severity: 'medium', scopeTags: [], active: true,
+  });
+  savePipeline(state, draft.id, { ...draft, actorId: 'maya', active: true });
+  const generalPreview = previewRoute(state, 'email');
+  assert.equal(generalPreview.pipeline.id, 'default');
+  const preview = previewRoute(state, 'affiliate, email');
+  assert.equal(preview.pipeline.id, draft.id);
+  assert.deepEqual(preview.stages.map((item) => item.id), [stage.id]);
+  assert.ok(preview.rules.some((item) => item.id === rule.id));
+  assert.ok(preview.rules.some((item) => item.baseline));
+  const mr = createSubmission(state, {
+    actorId: 'alex', title: 'Affiliate email', tags: 'affiliate, email',
+    content: 'Guaranteed approval when you compare options for existing customers.',
+  });
+  assert.equal(currentVersion(mr).pipeline.id, preview.pipeline.id);
+  assert.deepEqual(currentVersion(mr).stagePlan.map((item) => item.id), preview.stages.map((item) => item.id));
+  assert.deepEqual(currentVersion(mr).checks.map((item) => item.ruleId), preview.rules.map((item) => item.id));
+  assert.ok(currentVersion(mr).checks.some((check) => check.pipelineId === 'default' && !check.passed));
+
+  const specific = savePipeline(state, null, {
+    actorId: 'maya', name: 'Affiliate email route', scopeTags: 'affiliate, email', priority: 0, active: false,
+  });
+  saveStage(state, null, { actorId: 'maya', pipelineId: specific.id, name: 'Email compliance', role: 'compliance', scopeTags: [], order: 1, active: true });
+  savePipeline(state, specific.id, { ...specific, actorId: 'maya', active: true });
+  assert.equal(previewRoute(state, 'affiliate, email').pipeline.id, specific.id);
+  assert.equal(currentVersion(mr).pipeline.id, draft.id);
+});
+
+test('legacy stores still have a default pipeline without rewriting old versions', () => {
+  const state = seedState();
+  delete state.pipelines;
+  state.stages.forEach((stage) => { delete stage.pipelineId; });
+  state.rules.forEach((rule) => { delete rule.pipelineId; });
+  assert.equal(previewRoute(state, 'affiliate').pipeline.id, 'default');
+  const mr = createSubmission(state, { actorId: 'alex', title: 'Legacy routing', tags: 'affiliate', content: 'Advertising disclosure in this affiliate example.' });
+  assert.equal(currentVersion(mr).pipeline.id, 'default');
+  assert.ok(currentVersion(mr).stagePlan.length >= 2);
+});
+
+test('equal-specificity pipelines use priority and incomplete routes stay inactive', () => {
+  const state = seedState();
+  const first = savePipeline(state, null, { actorId: 'maya', name: 'Affiliate route', scopeTags: 'affiliate', priority: 1, active: false });
+  const second = savePipeline(state, null, { actorId: 'maya', name: 'Email route', scopeTags: 'email', priority: 2, active: false });
+  saveStage(state, null, { actorId: 'maya', pipelineId: first.id, name: 'Affiliate approval', role: 'compliance', scopeTags: [], order: 1, active: true });
+  saveStage(state, null, { actorId: 'maya', pipelineId: second.id, name: 'Email approval', role: 'legal', scopeTags: [], order: 1, active: true });
+  savePipeline(state, first.id, { ...first, actorId: 'maya', active: true });
+  savePipeline(state, second.id, { ...second, actorId: 'maya', active: true });
+  assert.equal(previewRoute(state, 'affiliate, email').pipeline.id, second.id);
+  assert.throws(() => savePipeline(state, 'default', {
+    actorId: 'maya', name: 'Default review', scopeTags: 'email', priority: 0, active: true,
+  }), /default pipeline must stay active/);
+  assert.equal(previewRoute(state, 'print').pipeline.id, 'default');
 });
 
 test('change requests require a revision; approval belongs to the current version', () => {

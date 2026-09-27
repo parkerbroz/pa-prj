@@ -30,7 +30,7 @@ Each submission has:
 
 - Tags: any combination of product, channel, jurisdiction, audience, partner, campaign, or other labels the team creates
 - Owner: the marketer or team responsible for the submission
-- Status: in review, changes requested, approved, or published
+- Status: in review, changes requested, approved, published, or closed
 - Version history: every submitted revision, with its own findings and approvals
 
 The internal Git analogy is:
@@ -54,9 +54,9 @@ The default workflow is:
 
 `Draft → Automated preflight → Compliance review → Changes requested or approved → Publish`
 
-The workflow branches based on tags. An administrator can configure a stage or check to apply to every submission or only when the submission has specified tags. Tags are open ended; products, channels, and jurisdictions are examples, not fixed choices in the data model.
+The workflow branches based on tags. An administrator can create named pipelines with required tags. The most-specific active match wins, with priority breaking ties. The default pipeline supplies baseline checks to every MR and its approval route when no specialized pipeline matches. Within the selected pipeline, stages and checks can have additional tag conditions. Tags are open ended; products, channels, and jurisdictions are examples, not fixed choices in the data model.
 
-Automated checks run as a preflight step before a human review begins. Example checks include:
+Checks belong to stages, never directly to a pipeline. Matching deterministic and optional AI checks run when each version is submitted, before human approval. If an AI check cannot run, it opens a manual-review finding rather than passing silently. Example checks include:
 
 - Required disclosure is missing
 - A claim does not match an approved source or product term
@@ -72,7 +72,7 @@ Checks should return an explanation, severity, rule reference, and suggested nex
 
 ### 1. MR list
 
-The home screen is a work queue for marketers and compliance workers. Users can filter by status or any tag and search material titles and owners. Review time and first-pass approval metrics are natural next steps.
+The home screen is a work queue for marketers and compliance workers. Users can filter by status, multiple tags that must all match, and search material titles and owners. Review time and first-pass approval metrics are natural next steps.
 
 The queue should make the next action obvious. A compliance reviewer should be able to open “high-risk affiliate submissions awaiting review” without navigating through projects or folders.
 
@@ -82,26 +82,26 @@ The detail view contains:
 
 - A preview of the asset
 - Submission metadata and applicable rule sets
-- Version selector and side-by-side comparison
+- File/version history with copy and attachment changes, a version selector, and side-by-side comparison
 - Automated preflight results
 - Findings with quoted evidence and policy sources
 - Reviewer comments and replies
-- Current approval status and required approvers
+- Visual pipeline progress, current approval status, and required approvers
 - Full audit history
 
-Marketers can respond in the discussion and submit a new version. Reviewers can add or resolve findings, request changes, or approve. Explicit escalation and rejection states are future extensions.
+Marketers can respond in the discussion and submit a new version. Reviewers can add or resolve findings, request changes, or approve. An MR can also be closed with a reason; the record remains available but read-only. Explicit escalation and rejection states are future extensions.
 
 ### 3. Pipeline builder
 
-Administrators can build one ordered route from conditional human approval stages. Every stage has a reviewer team and a tag condition. Automated checks run at submission time when their stage matches; publication is a separate action after all stages approve.
+Administrators can create multiple named pipelines, assign each required MR tags, and build its ordered route from conditional human approval stages. New pipelines start as drafts so an incomplete route cannot capture MRs. Automated checks run at submission time when their pipeline and stage match; publication is a separate action after all stages approve.
 
-The 24-hour MVP provides an ordered, tag-conditional builder rather than an entirely free-form workflow engine. Pipeline-level checks and a tag-based route preview live here.
+The 24-hour MVP provides an ordered, tag-conditional builder rather than an entirely free-form workflow engine. The route preview calls the same backend selection function used for actual MR submissions.
 
 ### 4. Stage builder
 
 Each stage has a reviewer team, order, active state, and tag condition. Its checks have an additional optional tag condition, type, severity, policy category, source, and version. Approved disclosures, rate tables, product terms, and claims should eventually have a governed source of truth.
 
-When a check runs, the system records the exact rule and stage versions used. If configuration changes later, the historical review record remains intact.
+When a check runs, the system records the exact rule and stage versions used. Checks and stages can be deleted from future routes without erasing historical results. An active pipeline must retain an unconditional stage.
 
 ## Audit trail and governance
 
@@ -124,7 +124,7 @@ The system should support an exportable audit package containing the final asset
 
 ## Safety and AI principles
 
-AI can make review faster by identifying likely issues, matching claims to approved sources, summarizing changes, and suggesting fixes. It should not silently approve content or present uncertain interpretations as legal advice.
+AI can make review faster by identifying likely issues, matching claims to approved sources, summarizing changes, and suggesting fixes. The prototype implements configurable advisory text checks with explicit server-side opt-in. They run automatically on version submission, send pasted copy but not attachments, and never approve content or present uncertain interpretations as legal advice.
 
 Every AI finding should include:
 
